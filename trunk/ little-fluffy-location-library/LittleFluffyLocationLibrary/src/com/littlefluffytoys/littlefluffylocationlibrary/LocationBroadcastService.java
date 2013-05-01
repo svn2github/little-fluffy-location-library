@@ -74,23 +74,32 @@ public class LocationBroadcastService extends Service {
         public void run() {
             boolean stopServiceOnCompletion = true;
 
-            final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(LocationBroadcastService.this.getBaseContext());
+            final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
             final long lastLocationUpdateTimestamp = prefs.getLong(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_TIME, 0);
             final long lastLocationBroadcastTimestamp = prefs.getLong(LocationLibraryConstants.SP_KEY_LAST_LOCATION_BROADCAST_TIME, 0);
+            final boolean forceLocationToUpdate = prefs.getBoolean(LocationLibraryConstants.SP_KEY_FORCE_LOCATION_UPDATE, false);
 
             if (lastLocationBroadcastTimestamp == lastLocationUpdateTimestamp) {
                 // no new location found
-                if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": No new location update found");
+                if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": No new location update found since " + LocationInfo.formatTimestampForDebug(lastLocationUpdateTimestamp));
 
-                if (System.currentTimeMillis() - lastLocationUpdateTimestamp > LocationLibrary.getLocationMaximumAge()) {
+                if (forceLocationToUpdate || System.currentTimeMillis() - lastLocationUpdateTimestamp > LocationLibrary.getLocationMaximumAge()) {
+                    if (forceLocationToUpdate) {
+                        prefs.edit().putBoolean(LocationLibraryConstants.SP_KEY_FORCE_LOCATION_UPDATE, false).commit();
+                    }
                     // Current location is out of date. Force an update, and stop service if required.
                     stopServiceOnCompletion = !forceLocationUpdate();
                 }
             } else {
+                if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": New location update found at " + LocationInfo.formatTimestampForDebug(lastLocationUpdateTimestamp));
+                
                 final Editor prefsEditor = prefs.edit();
                 prefsEditor.putLong(LocationLibraryConstants.SP_KEY_LAST_LOCATION_BROADCAST_TIME, lastLocationUpdateTimestamp);
+                if (forceLocationToUpdate) {
+                    prefsEditor.putBoolean(LocationLibraryConstants.SP_KEY_FORCE_LOCATION_UPDATE, false);
+                }
                 prefsEditor.commit();
-                sendBroadcast(getBaseContext(), prefs, true);
+                sendBroadcast(getBaseContext(), true);
             }
 
             if (stopServiceOnCompletion) {
@@ -100,11 +109,11 @@ public class LocationBroadcastService extends Service {
         }
     };
     
-    protected static void sendBroadcast(final Context context, final SharedPreferences prefs, final boolean isPeriodicBroadcast) {
+    protected static void sendBroadcast(final Context context, final boolean isPeriodicBroadcast) {
         final Intent locationIntent = new Intent(LocationLibrary.broadcastPrefix + (isPeriodicBroadcast ? LocationLibraryConstants.LOCATION_CHANGED_PERIODIC_BROADCAST_ACTION : LocationLibraryConstants.LOCATION_CHANGED_TICKER_BROADCAST_ACTION));
         final LocationInfo locationInfo = new LocationInfo(context);
         locationIntent.putExtra(LocationLibraryConstants.LOCATION_BROADCAST_EXTRA_LOCATIONINFO, locationInfo);
-        if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": Broadcasting " + (isPeriodicBroadcast ? "periodic" : "latest") + " location update timed at " + LocationInfo.formatTimeAndDay(prefs.getLong(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_TIME, System.currentTimeMillis()), true));
+        if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": Broadcasting " + (isPeriodicBroadcast ? "periodic" : "latest") + " location update timed at " + LocationInfo.formatTimeAndDay(PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext()).getLong(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_TIME, System.currentTimeMillis()), true));
         context.sendBroadcast(locationIntent, "android.permission.ACCESS_FINE_LOCATION");
     }
 

@@ -16,12 +16,14 @@
 
 package com.littlefluffytoys.littlefluffylocationlibrary;
 
+import java.util.List;
+
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.SharedPreferences.Editor;
+import android.location.Location;
 import android.location.LocationManager;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
@@ -106,16 +108,44 @@ public class LocationLibrary {
      * and locationMaximumAge ({@link android.app.AlarmManager#INTERVAL_HOUR AlarmManager.INTERVAL_HOUR}), and broadcastEveryLocationUpdate by default is false.
      * 
      * @param broadcastPrefix The prefix to the broadcast intent string that tells the client app the location has changed.
+     * 
+     * @throws UnsupportedOperationException if the location service doesn't exist, or if the device has no location providers
      */
-    public static void initialiseLibrary(final Context context, final String broadcastPrefix) {
+    public static void initialiseLibrary(final Context context, final String broadcastPrefix) throws UnsupportedOperationException {
         if (!initialised) {
             if (showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": initialiseLibrary");
             LocationLibrary.broadcastPrefix = broadcastPrefix;
-            final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+            final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
             if (!prefs.getBoolean(LocationLibraryConstants.SP_KEY_RUN_ONCE, Boolean.FALSE)) {
                 if (showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": initialiseLibrary: first time ever run -> start alarm and listener");
                 startAlarmAndListener(context);
                 prefs.edit().putBoolean(LocationLibraryConstants.SP_KEY_RUN_ONCE, Boolean.TRUE).commit();
+                // see if we know where we are already
+                final LocationManager lm = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
+                if (lm != null) {
+                    final List<String> providers = lm.getAllProviders();
+                    if (providers.size() > 0) {
+                        Location bestLocation = null;
+                        for (String provider: lm.getAllProviders()) {
+                            final Location lastLocation = lm.getLastKnownLocation(provider);
+                            if (lastLocation != null) {
+                                if (bestLocation == null || !bestLocation.hasAccuracy() || (lastLocation.hasAccuracy() && lastLocation.getAccuracy() < bestLocation.getAccuracy())) {
+                                    bestLocation = lastLocation;
+                                }
+                            }
+                        }
+                        if (bestLocation != null) {
+                            if (showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": initialiseLibrary: remembering best location " + bestLocation.getLatitude() + "," + bestLocation.getLongitude());
+                            PassiveLocationChangedReceiver.processLocation(context, bestLocation, false);
+                        }
+                    }
+                    else {
+                        throw new UnsupportedOperationException("No location providers found on this device");
+                    }
+                }
+                else {
+                    throw new UnsupportedOperationException("Location service not found on this device");
+                }
             }
             initialised = true;
         }
@@ -137,7 +167,7 @@ public class LocationLibrary {
      * 
      * @see #initialiseLibrary(Context, String)
      */
-    public static void initialiseLibrary(final Context context, final long alarmFrequency, final int locationMaximumAge, final String broadcastPrefix) {
+    public static void initialiseLibrary(final Context context, final long alarmFrequency, final int locationMaximumAge, final String broadcastPrefix) throws UnsupportedOperationException {
         if (!initialised) {
             LocationLibrary.alarmFrequency = alarmFrequency;
             LocationLibrary.locationMaximumAge = locationMaximumAge;
@@ -157,7 +187,7 @@ public class LocationLibrary {
      * 
      * @see #initialiseLibrary(Context, String)
      */
-    public static void initialiseLibrary(final Context context, final boolean broadcastEveryLocationUpdate, final String broadcastPrefix) {
+    public static void initialiseLibrary(final Context context, final boolean broadcastEveryLocationUpdate, final String broadcastPrefix) throws UnsupportedOperationException {
         if (!initialised) {
             LocationLibrary.broadcastEveryLocationUpdate = broadcastEveryLocationUpdate;
             initialiseLibrary(context, broadcastPrefix);
@@ -185,7 +215,7 @@ public class LocationLibrary {
      * @see #initialiseLibrary(Context, boolean, String)
      * @see #initialiseLibrary(Context, String)
      */
-    public static void initialiseLibrary(final Context context, final long alarmFrequency, final int locationMaximumAge, final boolean broadcastEveryLocationUpdate, final String broadcastPrefix) {
+    public static void initialiseLibrary(final Context context, final long alarmFrequency, final int locationMaximumAge, final boolean broadcastEveryLocationUpdate, final String broadcastPrefix) throws UnsupportedOperationException {
         if (!initialised) {
             LocationLibrary.broadcastEveryLocationUpdate = broadcastEveryLocationUpdate;
             initialiseLibrary(context, alarmFrequency, locationMaximumAge, broadcastPrefix);
@@ -196,10 +226,8 @@ public class LocationLibrary {
      * To force an on-demand location update, call this method.
      */
     public static void forceLocationUpdate(final Context context) {
-        final Editor prefsEditor = PreferenceManager.getDefaultSharedPreferences(context).edit();
-        prefsEditor.putLong(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_TIME, 0);
-        prefsEditor.putLong(LocationLibraryConstants.SP_KEY_LAST_LOCATION_BROADCAST_TIME, 0);
-        prefsEditor.commit();
+        if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": forceLocationUpdate called to force a location update");
+        PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext()).edit().putBoolean(LocationLibraryConstants.SP_KEY_FORCE_LOCATION_UPDATE, true).commit();
         context.startService(new Intent(context, LocationBroadcastService.class));
     }
   
@@ -209,5 +237,5 @@ public class LocationLibrary {
      */
     public static void showDebugOutput(final boolean showDebugOutput) {
         LocationLibrary.showDebugOutput = showDebugOutput;
-    }    
+    }
 }

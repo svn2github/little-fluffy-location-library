@@ -49,9 +49,10 @@ public class LocationInfo implements Serializable {
     
     /**
      * Call this method to retrieve the latest location info. 
+     * @throws UnsupportedOperationException if location service unavailable, or no location providers are found on the device
      */
     public void refresh(final Context context) {
-        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
         lastLocationUpdateTimestamp = prefs.getLong(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_TIME, 0);
         lastLocationBroadcastTimestamp = prefs.getLong(LocationLibraryConstants.SP_KEY_LAST_LOCATION_BROADCAST_TIME, 0);
         lastLat = ((int) (prefs.getFloat(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_LAT, Integer.MIN_VALUE) * 1000000f)) / 1000000f;
@@ -93,6 +94,10 @@ public class LocationInfo implements Serializable {
      */
     public static String formatTimeAndDay(final long timestamp, final boolean includeSeconds) {
         return (DateFormat.format("kk:mm" + (includeSeconds ? ".ss" : "") + ", E", timestamp).toString());
+    }
+    
+    protected static String formatTimestampForDebug(final long timestamp) {
+        return timestamp + " (" + (timestamp > 0 ? formatTimeAndDay(timestamp, true) : "the dawn of time") + ")";
     }
     
     @Override

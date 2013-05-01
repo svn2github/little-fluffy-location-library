@@ -25,7 +25,6 @@ import android.content.SharedPreferences.Editor;
 import android.location.Location;
 import android.location.LocationManager;
 import android.preference.PreferenceManager;
-import android.text.format.DateFormat;
 import android.util.Log;
 
 /**
@@ -78,7 +77,11 @@ public class PassiveLocationChangedReceiver extends BroadcastReceiver {
   }
   
   protected static void processLocation(final Context context, final Location location) {
-      final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+      processLocation(context, location, true);
+  }
+  
+  protected static void processLocation(final Context context, final Location location, final boolean batchResponses) {
+      final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
       final float lastLat = prefs.getFloat(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_LAT, Long.MIN_VALUE);
       final float lastLong = prefs.getFloat(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_LNG, Long.MIN_VALUE);
       final int lastAccuracy = prefs.getInt(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_ACCURACY, Integer.MAX_VALUE);
@@ -88,7 +91,10 @@ public class PassiveLocationChangedReceiver extends BroadcastReceiver {
       final float thisLat = ((int) (location.getLatitude() * 1000000)) / 1000000f;
       final float thisLong =  ((int) (location.getLongitude() * 1000000)) / 1000000f;
       final int thisAccuracy = (int) location.getAccuracy();
-      final long thisTime = location.getTime();
+      long thisTime = location.getTime();
+      if (thisTime == 0) {
+          thisTime = System.currentTimeMillis();
+      }
       
       if (lastLat != Long.MIN_VALUE) {
           // The tricky maths bit to calculate the distance between two points:
@@ -105,8 +111,8 @@ public class PassiveLocationChangedReceiver extends BroadcastReceiver {
               }
           }
       }
-      
-      final long previousTime = prefs.getLong(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_TIME, thisTime);
+
+      final long previousTime = prefs.getLong(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_TIME, 0);
 
       final Editor prefsEditor = prefs.edit();
       
@@ -115,16 +121,16 @@ public class PassiveLocationChangedReceiver extends BroadcastReceiver {
           prefsEditor.putFloat(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_LAT, thisLat);
           prefsEditor.putFloat(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_LNG, thisLong);
           prefsEditor.putInt(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_ACCURACY, thisAccuracy);
-          if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": Storing location update, lat=" + thisLat + " long=" + thisLong + " accuracy=" + thisAccuracy + " time=" + thisTime + "(" + DateFormat.format("kk:mm.ss, E", thisTime) + ")");
+          if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": Storing location update, lat=" + thisLat + " long=" + thisLong + " accuracy=" + thisAccuracy + " time=" + LocationInfo.formatTimestampForDebug(thisTime));
       }
       else {
-          if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": Storing location update, less accurate so reusing prior location - time=" + thisTime);
+          if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": Storing location update, less accurate so reusing prior location - time=" + LocationInfo.formatTimestampForDebug(thisTime));
       }
       prefsEditor.commit();
 
       if (LocationLibrary.broadcastEveryLocationUpdate) {
           // broadcast it
-          LocationBroadcastService.sendBroadcast(context, prefs, false);
+          LocationBroadcastService.sendBroadcast(context, false);
       }
       
       if (thisTime - previousTime > LocationLibrary.getAlarmFrequency()) {
@@ -134,8 +140,13 @@ public class PassiveLocationChangedReceiver extends BroadcastReceiver {
           // So, instead of sending this immediately, force the send in 10 seconds.
           // If another location update comes in in the meantime, it will overwrite this one.
           // Location update will finally be sent 10 seconds after the last in this updates flurry was received.
-          if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ":processLocation: treating this update as a periodic update");
-          LocationBroadcastService.forceDelayedServiceCall(context, 10);
+          if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ":processLocation: treating this location update as a periodic update, timestamp=" + LocationInfo.formatTimestampForDebug(thisTime));
+          if (batchResponses) {
+              LocationBroadcastService.forceDelayedServiceCall(context, 10);
+          }
+          else {
+              context.startService(new Intent(context, LocationBroadcastService.class));
+          }
       }
    }
 }
