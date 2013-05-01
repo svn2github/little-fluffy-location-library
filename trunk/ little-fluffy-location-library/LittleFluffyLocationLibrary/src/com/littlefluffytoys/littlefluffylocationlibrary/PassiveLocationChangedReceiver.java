@@ -137,12 +137,12 @@ public class PassiveLocationChangedReceiver extends BroadcastReceiver {
           // We just got a location update that's longer apart than our usual alarm frequency,
           // so we should force this location update as a periodic update too.
           // Often, the device will get two or three location updates in quick succession.
-          // So, instead of sending this immediately, force the send in 10 seconds.
+          // So, instead of sending this immediately, force the send in LocationLibrary.stableLocationTimeoutInSeconds (default 5 seconds).
           // If another location update comes in in the meantime, it will overwrite this one.
           // Location update will finally be sent 10 seconds after the last in this updates flurry was received.
           if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ":processLocation: treating this location update as a periodic update, timestamp=" + LocationInfo.formatTimestampForDebug(thisTime));
           if (batchResponses) {
-              LocationBroadcastService.forceDelayedServiceCall(context, 10);
+              LocationBroadcastService.forceDelayedServiceCall(context, LocationLibrary.stableLocationTimeoutInSeconds);
           }
           else {
               context.startService(new Intent(context, LocationBroadcastService.class));

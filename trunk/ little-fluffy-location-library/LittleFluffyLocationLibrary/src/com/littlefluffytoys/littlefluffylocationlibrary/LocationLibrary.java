@@ -40,7 +40,8 @@ public class LocationLibrary {
     
     protected static boolean showDebugOutput = false;
     protected static boolean broadcastEveryLocationUpdate = false;
-    
+    protected static int stableLocationTimeoutInSeconds = 5; // how many seconds to wait during a flurry of location updates, until it can be assumed no more updates are forthcoming
+
     private static final String TAG = "LocationLibrary";
     
     protected static String broadcastPrefix;
