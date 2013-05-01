@@ -57,14 +57,14 @@ public class PassiveLocationChangedReceiver extends BroadcastReceiver {
             // Therefore, process this single one-shot location update.
             if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ":onReceive: SUPPORTS_JELLYBEAN_4_2 and contains location key => processing");
 
-            processLocation(context, (Location)intent.getExtras().get(key));
+            processLocation(context, (Location)intent.getExtras().get(key), true, true);
         }
         else {
             // Before Android 4.2, this update is followed by one or more updates from the passive location provider over a few seconds.
-            // So, let this onReceive execute, and update itself. And then force a service call in 30 seconds. Simples!
+            // So, let this onReceive execute, and update itself. And then force a service call in LocationLibrary.stableLocationTimeoutInSeconds (default 5 seconds). Simples!
             if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ":onReceive: pre-JELLYBEAN_4_2 => wait for update(s) from passive location provider");
 
-            LocationBroadcastService.forceDelayedServiceCall(context, 30);
+            LocationBroadcastService.forceDelayedServiceCall(context, LocationLibrary.stableLocationTimeoutInSeconds);
         }
     }
     else if (intent.hasExtra(key)) {
@@ -77,10 +77,10 @@ public class PassiveLocationChangedReceiver extends BroadcastReceiver {
   }
   
   protected static void processLocation(final Context context, final Location location) {
-      processLocation(context, location, true);
+      processLocation(context, location, true, false);
   }
   
-  protected static void processLocation(final Context context, final Location location, final boolean batchResponses) {
+  protected static void processLocation(final Context context, final Location location, final boolean batchResponses, final boolean forceBroadcast) {
       final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
       final float lastLat = prefs.getFloat(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_LAT, Long.MIN_VALUE);
       final float lastLong = prefs.getFloat(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_LNG, Long.MIN_VALUE);
@@ -133,7 +133,7 @@ public class PassiveLocationChangedReceiver extends BroadcastReceiver {
           LocationBroadcastService.sendBroadcast(context, false);
       }
       
-      if (thisTime - previousTime > LocationLibrary.getAlarmFrequency()) {
+      if (thisTime - previousTime > LocationLibrary.getAlarmFrequency() || forceBroadcast) {
           // We just got a location update that's longer apart than our usual alarm frequency,
           // so we should force this location update as a periodic update too.
           // Often, the device will get two or three location updates in quick succession.

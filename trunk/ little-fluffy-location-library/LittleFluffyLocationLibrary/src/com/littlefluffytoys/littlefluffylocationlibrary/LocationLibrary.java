@@ -137,7 +137,7 @@ public class LocationLibrary {
                         }
                         if (bestLocation != null) {
                             if (showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": initialiseLibrary: remembering best location " + bestLocation.getLatitude() + "," + bestLocation.getLongitude());
-                            PassiveLocationChangedReceiver.processLocation(context, bestLocation, false);
+                            PassiveLocationChangedReceiver.processLocation(context, bestLocation, false, false);
                         }
                     }
                     else {
