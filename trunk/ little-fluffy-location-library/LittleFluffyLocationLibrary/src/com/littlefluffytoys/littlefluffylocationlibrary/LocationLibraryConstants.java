@@ -44,6 +44,7 @@ public class LocationLibraryConstants {
   protected static final String SP_KEY_LAST_LOCATION_UPDATE_LNG = "LFT_SP_KEY_LAST_LOCATION_UPDATE_LNG";
   protected static final String SP_KEY_LAST_LOCATION_UPDATE_ACCURACY = "LFT_SP_KEY_LAST_LOCATION_UPDATE_ACCURACY";
   protected static final String SP_KEY_LAST_LOCATION_BROADCAST_TIME = "LFT_SP_KEY_LAST_LOCATION_SUBMIT_TIME";
+  protected static final String SP_KEY_LAST_LOCATION_UPDATE_PROVIDER = "LFT_SP_KEY_LAST_LOCATION_UPDATE_PROVIDER";
   protected static final String SP_KEY_FORCE_LOCATION_UPDATE = "LFT_SP_KEY_FORCE_LOCATION_UPDATE";
   protected static final String SP_KEY_RUN_ONCE = "LFT_SP_KEY_RUN_ONCE";
   

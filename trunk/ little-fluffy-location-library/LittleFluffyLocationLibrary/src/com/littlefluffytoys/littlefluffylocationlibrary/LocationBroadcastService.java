@@ -17,6 +17,9 @@
 
 package com.littlefluffytoys.littlefluffylocationlibrary;
 
+import java.util.Timer;
+import java.util.TimerTask;
+
 import android.annotation.TargetApi;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
@@ -130,7 +133,7 @@ public class LocationBroadcastService extends Service {
     public boolean forceLocationUpdate() {
         final LocationManager locationManager = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
         final Criteria criteria = new Criteria();
-        criteria.setAccuracy(Criteria.ACCURACY_COARSE);
+        criteria.setAccuracy(!LocationLibrary.useFineAccuracyForRequests && locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) ? Criteria.ACCURACY_COARSE : Criteria.ACCURACY_FINE);
 
         if (LocationLibraryConstants.SUPPORTS_GINGERBREAD) {
             if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": Force a single location update, as current location is beyond the oldest location permitted");
@@ -139,6 +142,19 @@ public class LocationBroadcastService extends Service {
             final PendingIntent oneshotReceiver = PendingIntent.getBroadcast(getApplicationContext(), 0, receiver, PendingIntent.FLAG_UPDATE_CURRENT);
             try {
                 locationManager.requestSingleUpdate(criteria, oneshotReceiver);
+                if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": schedule timer to kill locationlistener in 30 seconds");
+                new Timer().schedule(new TimerTask(){
+                    public void run(){
+                        try {
+                            if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": remove updates after 30 seconds");
+                            locationManager.removeUpdates(oneshotReceiver);
+                        }
+                        catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                        stopSelf();
+                    }}, 30000);
+                return true; // don't stop the service, allow the timer to do that
             }
             catch (IllegalArgumentException ex) {
                 // thrown if there are no providers, e.g. GPS is off

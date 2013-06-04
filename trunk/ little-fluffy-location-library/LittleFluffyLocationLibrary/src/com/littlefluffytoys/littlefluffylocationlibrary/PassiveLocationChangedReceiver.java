@@ -85,7 +85,8 @@ public class PassiveLocationChangedReceiver extends BroadcastReceiver {
       final float lastLat = prefs.getFloat(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_LAT, Long.MIN_VALUE);
       final float lastLong = prefs.getFloat(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_LNG, Long.MIN_VALUE);
       final int lastAccuracy = prefs.getInt(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_ACCURACY, Integer.MAX_VALUE);
-      
+      final String thisProvider = location.getProvider();
+
       boolean usePreviousReading = false;
       
       final float thisLat = ((int) (location.getLatitude() * 1000000)) / 1000000f;
@@ -121,6 +122,7 @@ public class PassiveLocationChangedReceiver extends BroadcastReceiver {
           prefsEditor.putFloat(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_LAT, thisLat);
           prefsEditor.putFloat(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_LNG, thisLong);
           prefsEditor.putInt(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_ACCURACY, thisAccuracy);
+          prefsEditor.putString(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_PROVIDER, thisProvider);
           if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": Storing location update, lat=" + thisLat + " long=" + thisLong + " accuracy=" + thisAccuracy + " time=" + LocationInfo.formatTimestampForDebug(thisTime));
       }
       else {

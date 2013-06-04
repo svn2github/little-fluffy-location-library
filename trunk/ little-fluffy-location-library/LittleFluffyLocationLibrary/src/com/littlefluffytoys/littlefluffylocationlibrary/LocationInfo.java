@@ -39,6 +39,7 @@ public class LocationInfo implements Serializable {
     public float lastLat;
     public float lastLong;
     public int lastAccuracy;
+    public String lastProvider;
 
     /**
      * The constructor populates the public fields with the latest location info. 
@@ -58,6 +59,7 @@ public class LocationInfo implements Serializable {
         lastLat = ((int) (prefs.getFloat(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_LAT, Integer.MIN_VALUE) * 1000000f)) / 1000000f;
         lastLong = ((int) (prefs.getFloat(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_LNG, Integer.MIN_VALUE) * 1000000f)) / 1000000f;
         lastAccuracy = prefs.getInt(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_ACCURACY, Integer.MAX_VALUE);
+        lastProvider = prefs.getString(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_PROVIDER, null);
     }
 
     /**
