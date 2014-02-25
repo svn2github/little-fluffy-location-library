@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Little Fluffy Toys Ltd
+ * Copyright 2014 Little Fluffy Toys Ltd
  * Adapted from work by Reto Meier, Copyright 2011 Google Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +17,7 @@
 
 package com.littlefluffytoys.littlefluffylocationlibrary;
 
+import android.annotation.TargetApi;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -24,6 +25,7 @@ import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
 import android.location.Location;
 import android.location.LocationManager;
+import android.os.Build;
 import android.preference.PreferenceManager;
 import android.util.Log;
 
@@ -79,7 +81,8 @@ public class PassiveLocationChangedReceiver extends BroadcastReceiver {
   protected static void processLocation(final Context context, final Location location) {
       processLocation(context, location, true, false);
   }
-  
+
+  @TargetApi(Build.VERSION_CODES.GINGERBREAD)
   protected static void processLocation(final Context context, final Location location, final boolean batchResponses, final boolean forceBroadcast) {
       final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
       final float lastLat = prefs.getFloat(LocationLibraryConstants.SP_KEY_LAST_LOCATION_UPDATE_LAT, Long.MIN_VALUE);
@@ -128,7 +131,12 @@ public class PassiveLocationChangedReceiver extends BroadcastReceiver {
       else {
           if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": Storing location update, less accurate so reusing prior location - time=" + LocationInfo.formatTimestampForDebug(thisTime));
       }
-      prefsEditor.commit();
+      if (LocationLibraryConstants.SUPPORTS_GINGERBREAD) {
+    	  prefsEditor.apply();
+      }
+      else {
+          prefsEditor.commit();
+      }
 
       if (LocationLibrary.broadcastEveryLocationUpdate) {
           // broadcast it

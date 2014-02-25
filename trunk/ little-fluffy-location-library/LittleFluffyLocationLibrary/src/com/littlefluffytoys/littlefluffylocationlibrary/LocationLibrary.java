@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Little Fluffy Toys Ltd
+ * Copyright 2014 Little Fluffy Toys Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,23 @@ package com.littlefluffytoys.littlefluffylocationlibrary;
 
 import java.util.List;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GooglePlayServicesUtil;
+import com.google.android.gms.common.GooglePlayServicesClient.ConnectionCallbacks;
+import com.google.android.gms.common.GooglePlayServicesClient.OnConnectionFailedListener;
+import com.google.android.gms.location.LocationClient;
+
+import android.annotation.TargetApi;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.SharedPreferences.Editor;
 import android.location.Location;
 import android.location.LocationManager;
+import android.os.Build;
+import android.os.Bundle;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.util.Log;
@@ -36,7 +46,7 @@ import android.util.Log;
  * 
  * @author Kenton Price, Little Fluffy Toys Ltd - {@link www.littlefluffytoys.mobi}
  */
-public class LocationLibrary {
+public class LocationLibrary implements ConnectionCallbacks, OnConnectionFailedListener {
     
     protected static boolean showDebugOutput = false;
     protected static boolean useFineAccuracyForRequests = false;
@@ -60,7 +70,21 @@ public class LocationLibrary {
         return alarmFrequency;
     }
     
-    public static void startAlarmAndListener(final Context context) {
+	private static LocationLibrary mLocationLibrary;
+	private static Context mContext;
+
+	private LocationClient mLocationClient;
+	
+	private static LocationLibrary getInstance(Context context) {
+		if (mLocationLibrary == null) {
+			mLocationLibrary = new LocationLibrary();
+			mContext = context.getApplicationContext();
+		}
+		return mLocationLibrary;
+	}
+
+    @TargetApi(Build.VERSION_CODES.FROYO)
+	public static void startAlarmAndListener(final Context context) {
         if (showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": startAlarmAndListener: alarmFrequency=" + (alarmFrequency == LocationLibraryConstants.DEFAULT_ALARM_FREQUENCY ? "default:" : "") + alarmFrequency/1000 + " secs, locationMaximumAge=" + (locationMaximumAge == LocationLibraryConstants.DEFAULT_MAXIMUM_LOCATION_AGE ? "default:" : "") + locationMaximumAge/1000 + " secs");
         
         final PendingIntent alarmIntent = PendingIntent.getService(context, LocationLibraryConstants.LOCATION_BROADCAST_REQUEST_CODE_REPEATING_ALARM, new Intent(context, LocationBroadcastService.class), PendingIntent.FLAG_UPDATE_CURRENT);
@@ -113,7 +137,8 @@ public class LocationLibrary {
      * 
      * @throws UnsupportedOperationException if the location service doesn't exist, or if the device has no location providers
      */
-    public static void initialiseLibrary(final Context context, final String broadcastPrefix) throws UnsupportedOperationException {
+    @TargetApi(Build.VERSION_CODES.GINGERBREAD)
+	public static void initialiseLibrary(final Context context, final String broadcastPrefix) throws UnsupportedOperationException {
         if (!initialised) {
             if (showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": initialiseLibrary");
             LocationLibrary.broadcastPrefix = broadcastPrefix;
@@ -121,33 +146,50 @@ public class LocationLibrary {
             if (!prefs.getBoolean(LocationLibraryConstants.SP_KEY_RUN_ONCE, Boolean.FALSE)) {
                 if (showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": initialiseLibrary: first time ever run -> start alarm and listener");
                 startAlarmAndListener(context);
-                prefs.edit().putBoolean(LocationLibraryConstants.SP_KEY_RUN_ONCE, Boolean.TRUE).commit();
-                // see if we know where we are already
-                final LocationManager lm = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
-                if (lm != null) {
-                    final List<String> providers = lm.getAllProviders();
-                    if (providers.size() > 0) {
-                        Location bestLocation = null;
-                        for (String provider: lm.getAllProviders()) {
-                            final Location lastLocation = lm.getLastKnownLocation(provider);
-                            if (lastLocation != null) {
-                                if (bestLocation == null || !bestLocation.hasAccuracy() || (lastLocation.hasAccuracy() && lastLocation.getAccuracy() < bestLocation.getAccuracy())) {
-                                    bestLocation = lastLocation;
-                                }
-                            }
-                        }
-                        if (bestLocation != null) {
-                            if (showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": initialiseLibrary: remembering best location " + bestLocation.getLatitude() + "," + bestLocation.getLongitude());
-                            PassiveLocationChangedReceiver.processLocation(context, bestLocation, false, false);
-                        }
-                    }
-                    else {
-                        throw new UnsupportedOperationException("No location providers found on this device");
-                    }
+                final Editor prefsEditor = prefs.edit();
+                prefsEditor.putBoolean(LocationLibraryConstants.SP_KEY_RUN_ONCE, Boolean.TRUE);
+                if (LocationLibraryConstants.SUPPORTS_GINGERBREAD) {
+                	prefsEditor.apply();
                 }
                 else {
-                    throw new UnsupportedOperationException("Location service not found on this device");
+                	prefsEditor.commit();
                 }
+
+                // see if we know where we are already
+        	    if (LocationLibraryConstants.SUPPORTS_GINGERBREAD && GooglePlayServicesUtil.isGooglePlayServicesAvailable(context.getApplicationContext()) == ConnectionResult.SUCCESS) {
+                    if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": initialiseLibrary: using Google GMS Location");
+                    final LocationLibrary locationLibrary = getInstance(context);
+                    locationLibrary.mLocationClient = new LocationClient(context.getApplicationContext(), locationLibrary, locationLibrary);
+                    locationLibrary.mLocationClient.connect(); // this will cause an onConnected() or onConnectionFailed() callback
+        	    }
+        	    else {
+                    if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": initialiseLibrary: using Android AOSP location");
+	                final LocationManager lm = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
+	                if (lm != null) {
+	                    final List<String> providers = lm.getAllProviders();
+	                    if (providers.size() > 0) {
+	                        Location bestLocation = null;
+	                        for (String provider: lm.getAllProviders()) {
+	                            final Location lastLocation = lm.getLastKnownLocation(provider);
+	                            if (lastLocation != null) {
+	                                if (bestLocation == null || !bestLocation.hasAccuracy() || (lastLocation.hasAccuracy() && lastLocation.getAccuracy() < bestLocation.getAccuracy())) {
+	                                    bestLocation = lastLocation;
+	                                }
+	                            }
+	                        }
+	                        if (bestLocation != null) {
+	                            if (showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": initialiseLibrary: remembering best location " + bestLocation.getLatitude() + "," + bestLocation.getLongitude());
+	                            PassiveLocationChangedReceiver.processLocation(context, bestLocation, false, false);
+	                        }
+	                    }
+	                    else {
+	                        throw new UnsupportedOperationException("No location providers found on this device");
+	                    }
+	                }
+	                else {
+	                    throw new UnsupportedOperationException("Location service not found on this device");
+	                }
+        	    }
             }
             initialised = true;
         }
@@ -227,9 +269,18 @@ public class LocationLibrary {
     /**
      * To force an on-demand location update, call this method.
      */
-    public static void forceLocationUpdate(final Context context) {
+    @TargetApi(Build.VERSION_CODES.GINGERBREAD)
+	public static void forceLocationUpdate(final Context context) {
         if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": forceLocationUpdate called to force a location update");
-        PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext()).edit().putBoolean(LocationLibraryConstants.SP_KEY_FORCE_LOCATION_UPDATE, true).commit();
+        final Editor prefsEditor = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext()).edit();
+        prefsEditor.putBoolean(LocationLibraryConstants.SP_KEY_FORCE_LOCATION_UPDATE, true);
+        if (LocationLibraryConstants.SUPPORTS_GINGERBREAD) {
+        	prefsEditor.apply();
+        }
+        else {
+        	prefsEditor.commit();
+        }
+
         context.startService(new Intent(context, LocationBroadcastService.class));
     }
   
@@ -249,4 +300,38 @@ public class LocationLibrary {
     public static void showDebugOutput(final boolean showDebugOutput) {
         LocationLibrary.showDebugOutput = showDebugOutput;
     }
+    
+	/**
+	 * Google GMS Location
+	 */
+	public void onConnectionFailed(ConnectionResult arg0)
+	{
+        if (LocationLibrary.showDebugOutput) Log.w(LocationLibraryConstants.TAG, TAG + ": onConnectionFailed (Google GMS Location)");
+		mLocationLibrary = null;
+		mLocationClient = null;
+	}
+
+	/**
+	 * Google GMS Location
+	 */
+	public void onConnected(Bundle arg0)
+	{
+		if (mLocationClient != null) {
+			final Location mCurrentLocation = mLocationClient.getLastLocation();
+			mLocationClient.disconnect();
+			if (mCurrentLocation != null) {
+				if (LocationLibrary.showDebugOutput) Log.d(TAG, "Last location lat=" + mCurrentLocation.getLatitude() + " long=" + mCurrentLocation.getLongitude());
+	            PassiveLocationChangedReceiver.processLocation(mContext, mCurrentLocation, false, false);
+			}
+		}
+	}
+
+	/**
+	 * Google GMS Location
+	 */
+	public void onDisconnected()
+	{
+		mLocationLibrary = null;
+		mLocationClient = null;
+	}
 }
