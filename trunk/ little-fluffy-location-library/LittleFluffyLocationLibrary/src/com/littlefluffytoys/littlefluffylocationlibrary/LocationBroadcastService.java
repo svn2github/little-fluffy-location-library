@@ -63,6 +63,13 @@ public class LocationBroadcastService extends Service implements ConnectionCallb
 	private LocationClient mLocationClient;
 	private LocationRequest mLocationRequest;
 
+	
+	@Override
+	public void onCreate() {
+		super.onCreate();
+		mLocationClient = new LocationClient(getApplicationContext(), this, this);
+	}
+	
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": onStartCommand");
@@ -162,7 +169,6 @@ public class LocationBroadcastService extends Service implements ConnectionCallb
 	    if (LocationLibraryConstants.SUPPORTS_GINGERBREAD) {
 	    	if (GooglePlayServicesUtil.isGooglePlayServicesAvailable(getApplicationContext()) == ConnectionResult.SUCCESS) {
 	            if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": Force a single location update using Google GMS Location, as current location is beyond the oldest location permitted");
-		    	mLocationClient = new LocationClient(getApplicationContext(), this, this);
 	    		mLocationClient.connect(); // this will cause an onConnected() or onConnectionFailed() callback 
 	    		return true;
 		    }
@@ -268,7 +274,7 @@ public class LocationBroadcastService extends Service implements ConnectionCallb
         mLocationRequest.setPriority(LocationLibrary.useFineAccuracyForRequests ? LocationRequest.PRIORITY_HIGH_ACCURACY : LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
         mLocationRequest.setInterval(4000);
         mLocationRequest.setFastestInterval(1000);
-        mLocationClient.requestLocationUpdates(mLocationRequest, LocationBroadcastService.this);
+        mLocationClient.requestLocationUpdates(mLocationRequest, this);
 	}
 
 	/**
@@ -277,6 +283,7 @@ public class LocationBroadcastService extends Service implements ConnectionCallb
 	public void onDisconnected()
 	{
         if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": onDisconnected (Google GMS Location)");
+        mLocationClient.removeLocationUpdates(this);// Avoid crashes
 	}
 
 	/**
@@ -284,8 +291,7 @@ public class LocationBroadcastService extends Service implements ConnectionCallb
 	 */
 	public void onLocationChanged(Location location)
 	{
-        if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": onLocationChanged (Google GMS Location)");
-		mLocationClient.removeLocationUpdates(this);
+        if (LocationLibrary.showDebugOutput) Log.d(LocationLibraryConstants.TAG, TAG + ": onLocationChanged (Google GMS Location)");	
 		mLocationClient.disconnect();
 		PassiveLocationChangedReceiver.processLocation(LocationBroadcastService.this, location, false, true);
 	}
